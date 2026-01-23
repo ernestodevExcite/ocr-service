@@ -1,0 +1,27 @@
+fastapi
+uvicorn
+boto3
+python-multipart
+requests
+python-dotenv
+# OCR Engine
+paddleocr
+#paddlepaddle-gpu==2.6.2 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
+
+# Image Processing
+opencv-python>=4.8.0
+scikit-image>=0.21.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# NLP and Text Processing
+symspellpy>=6.7.0
+pyspellchecker>=0.7.0
+nltk>=3.8.0
+python-Levenshtein>=0.21.0
+
+# Data Export
+pandas>=2.0.0
+
+# Utilities
+tqdm>=4.66.0
