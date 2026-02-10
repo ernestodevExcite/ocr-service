@@ -29,9 +29,10 @@ class DJVUGenerator:
         self.djvulibre_path = djvulibre_path
         self.c44_cmd = self._find_command('c44')
         self.djvused_cmd = self._find_command('djvused')
+        self.djvm_cmd = self._find_command('djvm')
         
-        if not self.c44_cmd or not self.djvused_cmd:
-            logger.warning("djvulibre no encontrado en PATH. Asegúrate de tenerlo instalado.")
+        if not self.c44_cmd or not self.djvused_cmd or not self.djvm_cmd:
+            logger.warning("Algunas herramientas de djvulibre no fueron encontradas en PATH (c44, djvused, djvm).")
     
     def _find_command(self, cmd: str) -> Optional[str]:
         """
@@ -247,7 +248,6 @@ class DJVUGenerator:
                 return False, temp_text_file
             
             # Opcional: eliminar archivo temporal de texto
-            # (comentado por si quieres revisarlo)
             # if os.path.exists(temp_text_file):
             #     os.remove(temp_text_file)
             
@@ -257,3 +257,47 @@ class DJVUGenerator:
         except Exception as e:
             logger.error(f"Error creando DJVU con texto: {e}")
             return False, None
+
+    def merge_page_djvus(self, output_path: str, input_paths_list: List[str]) -> bool:
+        """
+        Une múltiples archivos DJVU de una sola página en un archivo multi-página.
+        
+        Args:
+            output_path: Ruta del archivo de salida
+            input_paths_list: Lista de rutas a los archivos DJVU individuales
+            
+        Returns:
+            True si la unión fue exitosa
+        """
+        if not self.djvm_cmd:
+            logger.error("Comando djvm no encontrado.")
+            return False
+            
+        if not input_paths_list:
+            logger.warning("No hay archivos para unir.")
+            return False
+            
+        try:
+            # djvm -c output.djvu page1.djvu page2.djvu ...
+            cmd = [self.djvm_cmd, '-c', output_path] + input_paths_list
+            
+            logger.info(f"Uniendo {len(input_paths_list)} archivos en {output_path}...")
+            
+            # djvm puede tener problemas con listas de argumentos muy largas si hay miles de páginas,
+            # pero para usos normales debería estar bien.
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            logger.info(f"✓ Archivo multi-página creado: {output_path}")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error ejecutando djvm:\nSTDOUT: {e.stdout}\nSTDERR: {e.stderr}")
+            return False
+        except Exception as e:
+            logger.error(f"Error uniendo archivos DJVU: {e}")
+            return False

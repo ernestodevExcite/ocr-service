@@ -101,3 +101,9 @@ class OCRPipelineDJVU(OCRPipeline):
         return self.djvu_generator.generate_djvu_text_file(
             text_lines, image_path, output_path, page_number
         )
+
+    def merge_djvu_files(self, output_path: str, input_paths_list: list) -> bool:
+        """
+        Wrapper para unir múltiples archivos DJVU.
+        """
+        return self.djvu_generator.merge_page_djvus(output_path, input_paths_list)

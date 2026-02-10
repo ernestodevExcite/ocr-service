@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -13,8 +15,12 @@ class S3Handler:
         self.secret_key = secret_key or os.getenv("R2_SECRET_ACCESS_KEY")
         self.bucket_name = bucket_name or os.getenv("R2_BUCKET_NAME")
         
+        if not all([self.endpoint_url, self.access_key, self.secret_key, self.bucket_name]):
+            raise ValueError("❌ Faltan variables de entorno para R2")
+        
         self.s3 = boto3.client(
             's3',
+            region_name='auto',
             endpoint_url=self.endpoint_url,
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key
