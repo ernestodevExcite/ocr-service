@@ -212,7 +212,7 @@ async def process_image_endpoint(file: UploadFile = File(...)):
         base_name = os.path.splitext(file.filename)[0]
 
         text, text_lines, metadata = pipeline.extract_text(
-            file_path, preprocess=True, refine_text=False
+            file_path, preprocess=False, refine_text=False
         )
 
         csv, txt, img, djvu = pipeline.save_results_with_djvu(
@@ -238,12 +238,16 @@ async def process_image_endpoint(file: UploadFile = File(...)):
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.write(djvu, arcname=f"{base_name}.djvu")
             zipf.write(txt, arcname=f"{base_name}.txt")
+            zipf.write(img,arcname=f"{base_name}.jpg")
+            zipf.write(csv,arcname=f"{base_name}.csv")
+
+            metadata_serializable = pipeline._make_json_serializable(metadata)
             zipf.writestr(
                 "metadata.json",
                 json.dumps({
                     "message": "OCR completed",
                     "lines_count": len(text_lines),
-                    "metadata": metadata
+                    "metadata": metadata_serializable
                 }, ensure_ascii=False)
             )
 

@@ -9,7 +9,7 @@ import logging
 import cv2
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
-
+import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -77,31 +77,87 @@ class DJVUGenerator:
             
             img_height, img_width = image.shape[:2]
             
+            def group_lines_by_row(lines, y_threshold=12):
+                """
+                Une cajas que están en la misma línea visual.
+                y_threshold ~ 8-15 funciona bien para 1600x2300
+                """
+
+                for l in lines:
+                    l['y_center'] = (l['y_min'] + l['y_max']) // 2
+
+                lines = sorted(lines, key=lambda l: l['y_center'])
+
+                groups = []
+                current = []
+
+                for l in lines:
+                    if not current:
+                        current.append(l)
+                        continue
+
+                    if abs(l['y_center'] - current[-1]['y_center']) <= y_threshold:
+                        current.append(l)
+                    else:
+                        groups.append(current)
+                        current = [l]
+
+                if current:
+                    groups.append(current)
+
+                return groups
+
+
             with open(output_path, 'w', encoding='utf-8') as f:
                 # 2. El encabezado DEBE tener el formato: (page x_offset y_offset ancho alto
                 # Usualmente x_offset e y_offset son 0 0
                 f.write(f'(page 0 0 {img_width} {img_height}\n')
                 
-                for line in text_lines:
-                    text = line.get('refined_text', line.get('text', '')).strip()
-                    if not text:
-                        continue
+                #for line in ordered_lines:
+                #for line in sort_layout_order(text_lines):
+                # for line in text_lines:
+                #     text = line.get('refined_text', line.get('text', '')).strip()
+                #     if not text:
+                #         continue
                     
-                    # Coordenadas (top-left de la imagen original)
-                    x_min = int(line.get('x_min', 0))
-                    y_min = int(line.get('y_min', 0))
-                    x_max = int(line.get('x_max', 0))
-                    y_max = int(line.get('y_max', 0))
+                #     # Coordenadas (top-left de la imagen original)
+                #     x_min = int(line.get('x_min', 0))
+                #     y_min = int(line.get('y_min', 0))
+                #     x_max = int(line.get('x_max', 0))
+                #     y_max = int(line.get('y_max', 0))
                     
-                    # 3. Conversión de coordenadas: DjVu mide de abajo hacia arriba
+                #     # 3. Conversión de coordenadas: DjVu mide de abajo hacia arriba
+                #     djvu_y1 = img_height - y_max
+                #     djvu_y2 = img_height - y_min
+                    
+                #     text_escaped = text.replace('\\', '\\\\').replace('"', '\\"')
+                    
+                #     # 4. Escribir la línea tabulada para orden
+                #     f.write(f' (line {x_min} {djvu_y1} {x_max} {djvu_y2} "{text_escaped}")\n')
+                
+                groups = group_lines_by_row(text_lines)
+
+                for group in groups:
+
+                    # ordenar izquierda → derecha
+                    group = sorted(group, key=lambda l: l['x_min'])
+
+                    full_text = " ".join(
+                        g.get('refined_text', g.get('text', '')).strip()
+                        for g in group
+                    )
+
+                    x_min = min(g['x_min'] for g in group)
+                    y_min = min(g['y_min'] for g in group)
+                    x_max = max(g['x_max'] for g in group)
+                    y_max = max(g['y_max'] for g in group)
+
                     djvu_y1 = img_height - y_max
                     djvu_y2 = img_height - y_min
-                    
-                    text_escaped = text.replace('\\', '\\\\').replace('"', '\\"')
-                    
-                    # 4. Escribir la línea tabulada para orden
+
+                    text_escaped = full_text.replace('\\', '\\\\').replace('"', '\\"')
+
                     f.write(f' (line {x_min} {djvu_y1} {x_max} {djvu_y2} "{text_escaped}")\n')
-                
                 # 5. Cerrar el paréntesis de (page ...)
                 f.write(')\n')
             

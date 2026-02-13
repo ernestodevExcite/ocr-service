@@ -69,10 +69,15 @@ class OCRPipeline:
         self.ocr = PaddleOCR(
             use_textline_orientation=ocr_params['use_textline_orientation'],
             lang=ocr_params['lang'],
-            text_det_thresh=ocr_params['text_det_thresh'],
-            text_det_box_thresh=ocr_params['text_det_box_thresh'],
-            text_recognition_batch_size=ocr_params['text_recognition_batch_size'],
-            #device=device_param
+            # text_det_thresh=ocr_params['text_det_thresh'],
+            # text_det_box_thresh=ocr_params['text_det_box_thresh'],
+            # text_recognition_batch_size=ocr_params['text_recognition_batch_size'],
+            #det_limit_side_len=2300,
+            text_det_thresh=0.3,
+            text_det_box_thresh=0.6,
+            det_db_unclip_ratio=1.15,
+            #det_db_min_size=5,
+            device=device_param,
         )
         
         # Inicializar componentes de pre y post-procesamiento
@@ -81,7 +86,66 @@ class OCRPipeline:
         
         print("✓ Pipeline de OCR inicializado correctamente\n")
         logger.info("Pipeline de OCR inicializado correctamente")
-    
+    def _group_text_by_lines(self, text_lines: List[Dict], line_tolerance: float = 0.2) -> str:
+        """
+        Agrupa elementos de texto por su posición Y (línea horizontal) y los une correctamente.
+        """
+        if not text_lines:
+            return ""
+        
+        # Usar solo elementos que sean diccionarios
+        dict_lines = [line for line in text_lines if isinstance(line, dict)]
+        if not dict_lines:
+            # Si por alguna razón todo son strings, devolverlos tal cual en líneas
+            return '\n'.join(str(x) for x in text_lines)
+
+        # Calcular altura promedio para determinar tolerancia
+        heights = [
+            line.get('y_max', 0) - line.get('y_min', 0)
+            for line in dict_lines
+            if 'y_min' in line and 'y_max' in line
+        ]
+        avg_height = np.mean(heights) if heights else 50
+        tolerance = avg_height * line_tolerance
+        
+        # Agrupar por línea (usando y_min como referencia)
+        lines_dict = {}
+        for line_data in dict_lines:
+            y_min = line_data.get('y_min', 0)
+            y_max = line_data.get('y_max', 0)
+            y_center = (y_min + y_max) / 2
+            
+            # Buscar si ya existe una línea similar (dentro de la tolerancia)
+            found_line_key = None
+            for line_key in lines_dict.keys():
+                if abs(y_center - line_key) <= tolerance:
+                    found_line_key = line_key
+                    break
+            
+            if found_line_key is None:
+                # Nueva línea
+                lines_dict[y_center] = []
+            
+            # Agregar a la línea correspondiente
+            target_key = found_line_key if found_line_key is not None else y_center
+            lines_dict[target_key].append(line_data)
+        
+        # Ordenar líneas de arriba hacia abajo (por Y)
+        sorted_line_keys = sorted(lines_dict.keys())
+        
+        # Construir texto línea por línea
+        result_lines = []
+        for line_key in sorted_line_keys:
+            line_items = lines_dict[line_key]
+            # Ordenar elementos de la línea de izquierda a derecha (por x_min)
+            line_items.sort(key=lambda x: x.get('x_min', 0))
+            
+            # Unir palabras de la misma línea con espacios
+            line_text = ' '.join(item.get('text', '') for item in line_items)
+            result_lines.append(line_text)
+        
+        # Unir líneas con \n
+        return '\n'.join(result_lines)
     def draw_bounding_boxes(self, image_path: str, text_lines: List[Dict], 
                        output_path: str, show_text: bool = True):
         """
@@ -141,8 +205,8 @@ class OCRPipeline:
         logger.info(f"Imagen con bounding boxes guardada en: {output_path}")
 
     def extract_text(self, image_path: str, 
-                    preprocess: bool = True,
-                    refine_text: bool = True) -> Tuple[str, List[Dict], Dict]:
+                    preprocess: bool = False,
+                    refine_text: bool = False) -> Tuple[str, List[Dict], Dict]:
         """
         Extrae texto de una imagen usando el pipeline completo.
         
@@ -175,12 +239,19 @@ class OCRPipeline:
             metadata['preprocessing'] = preprocess_metadata
             
             # Guardar imagen procesada temporalmente para OCR
-            temp_path = str(Path(image_path).stem + '_processed.jpg')
+            temp_path = str(Path(image_path).stem + '_processed.png')
             cv2.imwrite(temp_path, processed_image)
             image_for_ocr = temp_path
         else:
-            image_for_ocr = image_path
-        
+            #convertir la imagen a png
+            if not image_path.lower().endswith('.png'):
+                img = cv2.imread(image_path)
+                new_path = str(Path(image_path).stem + '_processed.png')
+                cv2.imwrite(new_path, img)
+                image_for_ocr = new_path
+            #image_for_ocr = image_path
+            else:
+                image_for_ocr = image_path
         try:
             # Extracción OCR con PaddleOCR
             print("Ejecutando OCR con PaddleOCR...")
@@ -235,6 +306,15 @@ class OCRPipeline:
                                     y_coords = [point[1] for point in bbox]
                                     x_min, x_max = min(x_coords), max(x_coords)
                                     y_min, y_max = min(y_coords), max(y_coords)
+
+                                    #shrink bbox (mejorar precisión visual/DJVU)
+                                    pad_x = 3
+                                    pad_y = 2
+                                    x_min += pad_x
+                                    y_min += pad_y
+                                    x_max -= pad_y
+                                    y_max -= pad_x
+
                                 else:
                                     x_min = x_max = y_min = y_max = 0
                             except (TypeError, IndexError):
@@ -291,6 +371,13 @@ class OCRPipeline:
                                         y_coords = [point[1] for point in bbox]
                                         x_min, x_max = min(x_coords), max(x_coords)
                                         y_min, y_max = min(y_coords), max(y_coords)
+
+                                        pad_x = 3
+                                        pad_y = 2
+                                        x_min += pad_x
+                                        y_min += pad_y
+                                        x_max -= pad_x
+                                        y_max -= pad_y
                                     except (TypeError, IndexError):
                                         x_min = x_max = y_min = y_max = 0
                                 else:
@@ -312,8 +399,8 @@ class OCRPipeline:
                             continue
             
             # Unir texto completo
-            full_text = '\n'.join(full_text_parts)
-            
+            #full_text = '\n'.join(full_text_parts)
+            full_text = self._group_text_by_lines(text_lines)
             # Refinamiento post-OCR línea por línea
             if refine_text:
                 logger.info("Aplicando refinamiento de texto línea por línea...")
@@ -352,7 +439,11 @@ class OCRPipeline:
                     total_stats['correction_rate'] = 0
                 
                 metadata['refinement_stats'] = total_stats
-                full_text = '\n'.join(refined_full_text_parts)
+                #full_text = '\n'.join(refined_full_text_parts)
+                for i, line_data in enumerate(text_lines):
+                    if i < len(refined_full_text_parts):
+                        line_data['text'] = refined_full_text_parts[i]  # Actualizar con texto refinado
+                full_text = self._group_text_by_lines(text_lines)
             else:
                 # Si no se refina, usar texto original
                 for line_data in text_lines:
@@ -368,11 +459,11 @@ class OCRPipeline:
             
         finally:
             # Limpiar imagen temporal si existe
-            if preprocess and os.path.exists(image_for_ocr) and image_for_ocr != image_path:
-                try:
-                    os.remove(image_for_ocr)
-                except:
-                    pass
+            #if preprocess and os.path.exists(image_for_ocr) and image_for_ocr != image_path:
+            try:
+                os.remove(image_for_ocr)
+            except:
+                pass
     
     def save_results(self, text: str, text_lines: List[Dict], 
                 metadata: Dict, output_dir: str, 
