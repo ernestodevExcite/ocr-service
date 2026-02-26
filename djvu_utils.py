@@ -180,17 +180,17 @@ class DJVUGenerator:
             # --- PARA LOS ARCHIVOS TIFF ---
             # Si la extensión es .tif o .tiff, convertimos a .jpg temporalmente
             ext = Path(image_path).suffix.lower()
-            if ext in ['.tif', '.tiff']:
-                logger.info(f"Detectado archivo TIFF. Convirtiendo temporalmente a JPEG...")
-                img = cv2.imread(image_path)
-                if img is None:
-                    raise ValueError(f"No se pudo leer el archivo TIFF: {image_path}")
+            #if ext in ['.tif', '.tiff', '.png', ".jpg", ".jpeg"]:
+            logger.info(f"convirtiendo imagen a JPG temporal para compatibilidad con c44: {image_path}")
+            img = cv2.imread(image_path)
+            if img is None:
+                raise ValueError(f"No se pudo leer el archivo TIFF: {image_path}")
                 
-                temp_jpg = image_path.replace(ext, "_temp_conv.jpg")
-                cv2.imwrite(temp_jpg, img, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
-                processing_path = temp_jpg
-            else:
-                processing_path = image_path
+            temp_jpg = image_path.replace(ext, "_temp_conv.jpg")
+            cv2.imwrite(temp_jpg, img, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            processing_path = temp_jpg
+            #else:
+            #    processing_path = image_path
 
             # Construir comando c44 usando la ruta del archivo (original o convertido)
             cmd = [

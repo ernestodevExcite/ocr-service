@@ -212,7 +212,7 @@ async def process_image_endpoint(file: UploadFile = File(...)):
         base_name = os.path.splitext(file.filename)[0]
 
         text, text_lines, metadata = pipeline.extract_text(
-            file_path, preprocess=False, refine_text=False
+            file_path, preprocess=True, refine_text=False
         )
 
         csv, txt, img, djvu = pipeline.save_results_with_djvu(

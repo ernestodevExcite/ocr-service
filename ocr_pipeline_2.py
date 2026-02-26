@@ -21,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("    ORC-pipeline")
 
 
 class OCRPipeline:
@@ -186,9 +186,19 @@ class OCRPipeline:
             y_min = int(line['y_min'])
             x_max = int(line['x_max'])
             y_max = int(line['y_max'])
-            
+
+            # Asegurar coordenadas válidas (x_max >= x_min, y_max >= y_min)
+            if x_max < x_min:
+                x_min, x_max = x_max, x_min
+            if y_max < y_min:
+                y_min, y_max = y_max, y_min
+            if x_max == x_min:
+                x_max += 1
+            if y_max == y_min:
+                y_max += 1
+
             # Dibujar rectángulo
-            draw.rectangle([(x_min, y_min), (x_max, y_max)], 
+            draw.rectangle([(x_min, y_min), (x_max, y_max)],
                         outline='green', width=2)
             
             # Mostrar texto si está habilitado
@@ -312,8 +322,8 @@ class OCRPipeline:
                                     pad_y = 2
                                     x_min += pad_x
                                     y_min += pad_y
-                                    x_max -= pad_y
-                                    y_max -= pad_x
+                                    x_max -= pad_x
+                                    y_max -= pad_y
 
                                 else:
                                     x_min = x_max = y_min = y_max = 0
