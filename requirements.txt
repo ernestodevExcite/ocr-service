@@ -25,3 +25,7 @@ pandas>=2.0.0
 
 # Utilities
 tqdm>=4.66.0
+
+# PDF Processing
+pdf2image>=1.17.0   # Requiere Poppler en PATH (https://github.com/oschwartz10612/poppler-windows)
+fpdf2>=2.8.0        # PDF searchable con capa de texto OCR
